@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Pogoda</title>
+</head>
+<body>
+  <h1>Wybierz kraj i miasto</h1>
+  <form id="form">
+    <label>Kraj: <input name="country" required></label>
+    <label>Miasto: <input name="city" required></label>
+    <button type="submit">Pokaż pogodę</button>
+  </form>
+  <div id="weather"></div>
+
+  <script>
+    document.getElementById('form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const country = e.target.country.value;
+      const city    = e.target.city.value;
+      const res     = await fetch(`/weather?country=${country}&city=${city}`);
+      const data    = await res.json();
+      document.getElementById('weather').innerHTML = `
+        <h2>${data.name}</h2>
+        <p>Temperatura: ${data.main.temp} °C</p>
+        <p>Pogoda: ${data.weather[0].description}</p>
+      `;
+    });
+  </script>
+</body>
+</html>
