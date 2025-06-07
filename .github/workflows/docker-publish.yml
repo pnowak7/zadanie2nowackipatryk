@@ -1,5 +1,6 @@
-name: CI/CD Docker Multi-Arch
+name: CI/CD Docker Simple Build
 
+# Wykonuj workflow przy każdym pushie do main
 on:
   push:
     branches:
@@ -7,32 +8,22 @@ on:
 
 jobs:
   build-and-push:
-    name: Budowa obrazu, cache i skan CVE
+    name: Build, Scan i Push to GHCR (amd64 only)
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repozytorium
+      # 1. Pobierz kod z repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Setup QEMU (emulacja architektur)
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
-
-      # 3. Setup Buildx (build wieloarchitekturowy)
+      # 2. Zainstaluj Buildx (żeby mieć dostęp do docker/build-push-action)
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           install: true
 
-      # 4. Logowanie do DockerHub (dla cache)
-      - name: Login to DockerHub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
-
-      # 5. Logowanie do GHCR (GitHub Container Registry)
+      # 3. Zaloguj się do GitHub Container Registry (GHCR)
+      #    - używamy GITHUB_TOKEN, więc nie trzeba definiować GHCR_TOKEN ręcznie
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -40,50 +31,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 6. Budowa obrazu (z cache, ale BEZ push — najpierw skan)
-      - name: Build multi-arch image (cache only)
-        id: build_image
+      # 4. Buduj obraz tylko pod amd64 i wypchnij go od razu do GHCR
+      - name: Build and push Docker image (amd64)
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: false
-          builder: ${{ steps.setup-buildx.outputs.name }}
-          cache-from: type=registry,ref=docker.io/pnowak7/weather-app-cache:latest
-          cache-to: type=registry,ref=docker.io/pnowak7/weather-app-cache:latest,mode=max
+          platforms: linux/amd64
+          push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/weather-app:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/weather-app:latest
 
-      # 7. Zapis obrazu do pliku TAR do skanowania
-      - name: Save image as TAR
-        run: |
-          docker save ghcr.io/${{ github.repository_owner }}/weather-app:${{ github.sha }} -o app_image.tar
-
-      # 8. Skanowanie obrazu Trivy (vulnerabilities: HIGH, CRITICAL)
-      - name: Scan image with Trivy
+      # 5. Skanuj wypchnięty obraz Trivy (HIGH, CRITICAL)
+      - name: Scan pushed image with Trivy
         uses: aquasecurity/trivy-action@0.12.0
         with:
           scan-type: image
-          image-ref: ./app_image.tar
+          image-ref: ghcr.io/${{ github.repository_owner }}/weather-app:latest
           format: table
           exit-code: 1
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-
-      # 9. Push do GHCR (jeśli brak HIGH/CRITICAL luk)
-      - name: Push image to GHCR
-        if: success()
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          builder: ${{ steps.setup-buildx.outputs.name }}
-          cache-from: type=registry,ref=docker.io/pnowak7/weather-app-cache:latest
-          cache-to: type=registry,ref=docker.io/pnowak7/weather-app-cache:latest,mode=max
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/weather-app:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/weather-app:latest
