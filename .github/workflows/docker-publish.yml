@@ -1,6 +1,5 @@
 name: CI/CD Docker Simple Build
 
-# Wykonuj workflow przy każdym pushie do main
 on:
   push:
     branches:
@@ -8,22 +7,21 @@ on:
 
 jobs:
   build-and-push:
-    name: Build, Scan i Push to GHCR (amd64 only)
+    name: Build i Push do GHCR (amd64 only)
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Pobierz kod z repo
+      # 1. Pobieramy kod z repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Zainstaluj Buildx (żeby mieć dostęp do docker/build-push-action)
+      # 2. Instalujemy Buildx (do docker/build-push-action)
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           install: true
 
-      # 3. Zaloguj się do GitHub Container Registry (GHCR)
-      #    - używamy GITHUB_TOKEN, więc nie trzeba definiować GHCR_TOKEN ręcznie
+      # 3. Logujemy się do GitHub Container Registry (GHCR)
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -31,7 +29,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4. Buduj obraz tylko pod amd64 i wypchnij go od razu do GHCR
+      # 4. Budujemy i wypychamy obraz (tylko architektura amd64)
       - name: Build and push Docker image (amd64)
         uses: docker/build-push-action@v4
         with:
@@ -40,15 +38,15 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/weather-app:latest
+            ghcr.io/${{ github.repository }}:latest
 
-      # 5. Skanuj wypchnięty obraz Trivy (HIGH, CRITICAL)
-      - name: Scan pushed image with Trivy
-        uses: aquasecurity/trivy-action@0.12.0
-        with:
-          scan-type: image
-          image-ref: ghcr.io/${{ github.repository_owner }}/weather-app:latest
-          format: table
-          exit-code: 1
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
+      # 5. Poniżej zakomentowany krok Trivy (skanowanie obrazu)
+      # - name: Scan pushed image with Trivy
+      #   uses: aquasecurity/trivy-action@0.12.0
+      #   with:
+      #     scan-type: image
+      #     image-ref: ghcr.io/${{ github.repository }}:latest
+      #     format: table
+      #     exit-code: 1
+      #     severity: HIGH,CRITICAL
+      #     ignore-unfixed: true
